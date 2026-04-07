@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"runtime"
 
@@ -41,6 +42,7 @@ func main() {
 		MaxAge:           86400, // プリフライトリクエストを24時間キャッシュ
 	}))
 
+	fmt.Println("ws://localhost:8080で起動")
 	r.GET("/ws", userController.HandleWebSocket)
 	// r.GET("/login", RedisSessionController.Login)
 	r.Run(":8080")

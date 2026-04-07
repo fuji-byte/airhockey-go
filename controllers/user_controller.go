@@ -76,7 +76,7 @@ func (c *MemoryController) HandleWebSocket(ctx *gin.Context) {
 		}
 		c.userNumControll()
 		if users != nil {
-			broadcast(*users, "roomNum", "message", len(*users))
+			broadcast(users, "roomNum", "message", len(users))
 			fmt.Println(users)
 		}
 		fmt.Println("切断後処理完了:", clientID)
@@ -93,136 +93,119 @@ func (c *MemoryController) HandleWebSocket(ctx *gin.Context) {
 		}
 		fmt.Printf("受信メッセージ: %s\n", msg)
 		fmt.Printf("メッセージを受信しました\n")
-		var raw dto.TypeInput
-		// var receivedMsg dto.MessageInput
-		//shouldbindingするのか
-		if err := json.Unmarshal(msg, &raw); err != nil {
-			fmt.Println("JSON のパースに失敗1:", err)
+		var receivedMsg dto.MessageInput
+		if err := json.Unmarshal(msg, &receivedMsg); err != nil {
+			fmt.Println("MessageInput の解析に失敗:", err)
 			continue
 		}
-		switch raw.Type {
-		case "message":
-			var receivedMsg dto.MessageInput
-			if err := json.Unmarshal(raw.Data, &receivedMsg); err != nil {
-				fmt.Println("MessageInput の解析に失敗:", err)
+		switch receivedMsg.Type {
+		case "makeRoom":
+			roomId, err := c.service.MakeRoom(clientID)
+			if err != nil {
+				fmt.Println("MakeRoom Error:", err)
+				msg := `{"type":"errorMessage","message":"ルームを作成できませんでした。","error": "make a room Error"}`
+				user.Send(msg)
 				continue
 			}
-			switch receivedMsg.Type {
-			case "makeRoom":
-				roomId, err := c.service.MakeRoom(clientID)
-				if err != nil {
-					fmt.Println("MakeRoom Error:", err)
-					msg := `{"type":"errorMessage","message":"ルームを作成できませんでした。","error": "make a room Error"}`
-					user.Send(msg)
-					continue
-				}
-				user.Send(fmt.Sprintf(`{"type":"roomId","message":"%v"}`, roomId))
-				user.Send(`{"type":"roomNum", "message":"1"}`)
-				user.Send(`{"type":"host"}`)
-				continue
-			case "joinRoom":
-				user, err := c.service.GetUserByClientID(clientID)
-				if err != nil {
-					fmt.Println("no users:", err)
-					user.Send(`{"type":"errorMessage","message":"ユーザーを取得できませんでした。","error": "couldn't get the users Error"}`)
-					continue
-				}
-				tempUsers, err := c.service.JoinRoom(receivedMsg.RoomID, user)
-				if err != nil {
-					fmt.Println("join room Error:", err)
-					user.Send(`{"type":"errorMessage","message":"ルームに参加できませんでした。","error": "join in the room Error"}`)
-					continue
-				}
-				room, err := c.service.GetUsersByRoomId(receivedMsg.RoomID)
-				if err != nil {
-					fmt.Println("no users:", err)
-					user.Send(`{"type":"errorMessage","message":"ルームメンバーを取得できませんでした。","error": "couldn't get the room member(s) Error"}`)
-					continue
-				}
-				msg := fmt.Sprintf(`%vが参加しました`, user.Name)
-				broadcast(*room, "roomNum", "message", len(*room))
-				broadcast(*tempUsers, "message", "message", msg)
-				user.Send(fmt.Sprintf(`{"type":"roomId","message":"%v"}`, user.RoomID))
-				continue
-			case "leaveRoom":
-				user, err := c.service.GetUserByClientID(clientID)
-				if err != nil {
-					fmt.Println("no users:", err)
-					user.Send(`{"type":"errorMessage","message":"ユーザーを取得できませんでした。","error": "couldn't get the users Error"}`)
-					continue
-				}
-				err = c.service.LeaveRoom(user)
-				if err != nil {
-					user.Send(`{"type":"errorMessage","message":"ルームの退出に失敗しました","error": "failed to leave the room Error"}`)
-					continue
-				}
-				continue
-			case "match":
-				//host playerがmatchを送信したら
-				user, err := c.service.GetUserByClientID(clientID)
-				if err != nil {
-					fmt.Println("no users:", err)
-					user.Send(`{"type":"errorMessage","message":"ユーザーを取得できませんでした。","error": "couldn't get the users Error"}`)
-					continue
-				}
-				err = c.service.StartGame(user)
-				if err != nil {
-					user.Send(`{"type":"errorMessage","message":"ゲームのスタートに失敗しました","error": "failed to start the game or invalid host Error"}`)
-					continue
-				}
-				room, err := c.service.GetUsersByRoomId(user.RoomID)
-				if err != nil {
-					fmt.Println("no users:", err)
-					user.Send(`{"type":"errorMessage","message":"ルームメンバーを取得できませんでした。","error": "couldn't get the room member(s) Error"}`)
-					continue
-				}
-
-				for _, user := range *room {
-					if user == nil {
-						fmt.Printf("send Message Error to user\n")
-						continue
-					}
-					msg := fmt.Sprintf(`{"type":"%v", "%v": "%v"}`, "gameStart", "message", user.ID)
-					user.Send(msg)
-				}
-				continue
-			case "observe":
-				//roomのobserverに追加
-				//終わるまでか、観戦キャンセルされるまでずっとブロードキャスト
-				continue
-			case "reset":
-				users, err := c.service.GetAllUser()
-				if err != nil {
-					fmt.Println("no users", err)
-					continue
-				}
-				user.Send(fmt.Sprintf(`{"type":"userNum","message":"%d"}`, len(users)))
-				continue
-			default:
-				user.Send(`{"type":"errorMessage","message":"タイプが適切ではありません","error": "type Error"}`)
-				continue
-			}
-		case "game":
-			var receivedMsg dto.GameRoomInput
-			if err := json.Unmarshal(raw.Data, &receivedMsg); err != nil {
-				fmt.Println("GameRoomInput の解析に失敗:", err)
-				continue
-			}
+			user.Send(fmt.Sprintf(`{"type":"roomId","message":"%v"}`, roomId))
+			user.Send(`{"type":"roomNum", "message":"1"}`)
+			user.Send(`{"type":"host"}`)
+			continue
+		case "joinRoom":
 			user, err := c.service.GetUserByClientID(clientID)
 			if err != nil {
 				fmt.Println("no users:", err)
 				user.Send(`{"type":"errorMessage","message":"ユーザーを取得できませんでした。","error": "couldn't get the users Error"}`)
 				continue
 			}
-			err = c.service.UpdatePlayerPosition(user.RoomID, clientID, receivedMsg.PlayerX, receivedMsg.PlayerY)
+			tempUsers, err := c.service.JoinRoom(receivedMsg.RoomID, user)
+			if err != nil {
+				fmt.Println("join room Error:", err)
+				user.Send(`{"type":"errorMessage","message":"ルームに参加できませんでした。","error": "join in the room Error"}`)
+				continue
+			}
+			room, err := c.service.GetUsersByRoomId(receivedMsg.RoomID)
+			if err != nil {
+				fmt.Println("no users:", err)
+				user.Send(`{"type":"errorMessage","message":"ルームメンバーを取得できませんでした。","error": "couldn't get the room member(s) Error"}`)
+				continue
+			}
+			msg := fmt.Sprintf(`%vが参加しました`, user.Name)
+			broadcast(room, "roomNum", "message", len(room))
+			broadcast(tempUsers, "message", "message", msg)
+			user.Send(fmt.Sprintf(`{"type":"roomId","message":"%v"}`, user.RoomID))
+			continue
+		case "leaveRoom":
+			user, err := c.service.GetUserByClientID(clientID)
+			if err != nil {
+				fmt.Println("no users:", err)
+				user.Send(`{"type":"errorMessage","message":"ユーザーを取得できませんでした。","error": "couldn't get the users Error"}`)
+				continue
+			}
+			err = c.service.LeaveRoom(user)
+			if err != nil {
+				user.Send(`{"type":"errorMessage","message":"ルームの退出に失敗しました","error": "failed to leave the room Error"}`)
+				continue
+			}
+			user.Send(`{"type":"leaveRoom", "message":"ルームを退出しました"}`)
+			continue
+		case "match":
+			//host playerがmatchを送信したら
+			user, err := c.service.GetUserByClientID(clientID)
+			if err != nil {
+				fmt.Println("no users:", err)
+				user.Send(`{"type":"errorMessage","message":"ユーザーを取得できませんでした。","error": "couldn't get the users Error"}`)
+				continue
+			}
+			err = c.service.StartGame(user)
+			if err != nil {
+				user.Send(`{"type":"errorMessage","message":"ゲームのスタートに失敗しました","error": "failed to start the game or invalid host Error"}`)
+				continue
+			}
+			room, err := c.service.GetUsersByRoomId(user.RoomID)
+			if err != nil {
+				fmt.Println("no users:", err)
+				user.Send(`{"type":"errorMessage","message":"ルームメンバーを取得できませんでした。","error": "couldn't get the room member(s) Error"}`)
+				continue
+			}
+
+			for _, user := range room {
+				if user == nil {
+					fmt.Printf("send Message Error to user\n")
+					continue
+				}
+				msg := fmt.Sprintf(`{"type":"%v", "%v": "%v"}`, "gameStart", "message", user.ID)
+				user.Send(msg)
+			}
+			continue
+		case "game":
+			user, err := c.service.GetUserByClientID(clientID)
+			if err != nil {
+				fmt.Println("no users:", err)
+				user.Send(`{"type":"errorMessage","message":"ユーザーを取得できませんでした。","error": "couldn't get the users Error"}`)
+				continue
+			}
+			err = c.service.UpdatePlayerPosition(user.RoomID, clientID, receivedMsg.Position.PlayerX, receivedMsg.Position.PlayerY)
 			if err != nil {
 				fmt.Println("UpdatePlayerPosition Error:", err)
 				user.Send(`{"type":"errorMessage","message":"プレイヤーの位置を更新できませんでした。","error": "failed to update player position Error"}`)
 				continue
 			}
 			continue
+		case "observe":
+			//roomのobserverに追加
+			//終わるまでか、観戦キャンセルされるまでずっとブロードキャスト
+			continue
+		case "reset":
+			users, err := c.service.GetAllUsers()
+			if err != nil {
+				fmt.Println("no users", err)
+				continue
+			}
+			user.Send(fmt.Sprintf(`{"type":"userNum","message":"%d"}`, len(users)))
+			continue
 		default:
-			fmt.Println("不明なタイプ:", raw.Type)
+			user.Send(`{"type":"errorMessage","message":"タイプが適切ではありません","error": "type Error"}`)
 			continue
 		}
 	}
@@ -230,7 +213,7 @@ func (c *MemoryController) HandleWebSocket(ctx *gin.Context) {
 
 func (c *MemoryController) userNumControll() int {
 	//s.memoryService.userNum()を取得して、User全員にブロードキャスト
-	users, err := c.service.GetAllUser()
+	users, err := c.service.GetAllUsers()
 	if err != nil {
 		fmt.Println("no users", err)
 		return -1

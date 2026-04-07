@@ -14,11 +14,11 @@ type IMemoryService interface {
 	CreateUser(clientID string, conn *websocket.Conn) (*dto.User, error)
 	DeleteUser(clientID string) error
 	UserNum() int
-	GetAllUser() (map[string]*dto.User, error)
+	GetAllUsers() (map[string]*dto.User, error)
 	GetUserByClientID(clientID string) (*dto.User, error)
 	MakeRoom(clientID string) (string, error)
-	GetUsersByRoomId(Id string) (*map[string]*dto.User, error)
-	JoinRoom(roomId string, user *dto.User) (*map[string]*dto.User, error)
+	GetUsersByRoomId(Id string) (map[string]*dto.User, error)
+	JoinRoom(roomId string, user *dto.User) (map[string]*dto.User, error)
 	LeaveRoom(user *dto.User) error
 	StartGame(user *dto.User) error
 	GetRoomInfo(roomId string) (*dto.GameRoom, error)
@@ -46,8 +46,8 @@ func (s *MemoryService) UserNum() int {
 	return s.memoryRepository.UserNum()
 }
 
-func (s *MemoryService) GetAllUser() (map[string]*dto.User, error) {
-	return s.memoryRepository.GetAllUser()
+func (s *MemoryService) GetAllUsers() (map[string]*dto.User, error) {
+	return s.memoryRepository.GetAllUsers()
 }
 
 func (s *MemoryService) GetUserByClientID(clientID string) (*dto.User, error) {
@@ -75,13 +75,6 @@ func (s *MemoryService) MakeRoom(clientID string) (string, error) {
 
 	var observers map[string]*dto.User
 
-	gameState := dto.GameState{
-		PuckX:      0,
-		PuckY:      0,
-		PuckSpeedX: 0,
-		PuckSpeedY: 0,
-	}
-
 	newRoom := &dto.GameRoom{
 		ID:         roomId,
 		RoomName:   "",
@@ -89,8 +82,25 @@ func (s *MemoryService) MakeRoom(clientID string) (string, error) {
 		Observers:  observers,
 		HostPlayer: user,
 		Started:    false,
-		GameState:  gameState,
+		Width:      640,
+		Height:     320,
 	}
+
+	gameState := dto.GameState{
+		PuckX:       newRoom.Width / 2,
+		PuckY:       newRoom.Height / 2,
+		PuckSpeedX:  2,
+		PuckSpeedY:  2,
+		Player1X:    newRoom.Width / 4,
+		Player1Y:    newRoom.Height / 2,
+		Player2X:    3 * newRoom.Width / 4,
+		Player2Y:    newRoom.Height / 2,
+		Score1:      0,
+		Score2:      0,
+		TimeLeftSec: 30,
+	}
+
+	newRoom.GameState = gameState
 
 	// user, err := s.GetUserByClientID(clientID)
 	_, err = s.memoryRepository.MakeRoom(newRoom, user)
@@ -100,11 +110,11 @@ func (s *MemoryService) MakeRoom(clientID string) (string, error) {
 	return roomId, nil
 }
 
-func (s *MemoryService) GetUsersByRoomId(Id string) (*map[string]*dto.User, error) {
+func (s *MemoryService) GetUsersByRoomId(Id string) (map[string]*dto.User, error) {
 	return s.memoryRepository.GetUsersByRoomId(Id)
 }
 
-func (s *MemoryService) JoinRoom(roomId string, user *dto.User) (*map[string]*dto.User, error) {
+func (s *MemoryService) JoinRoom(roomId string, user *dto.User) (map[string]*dto.User, error) {
 	if (*user).RoomID != "-1" {
 		return nil, errors.New("user already in a Room")
 	}
@@ -126,9 +136,9 @@ func (s *MemoryService) LeaveRoom(user *dto.User) error {
 	return s.memoryRepository.LeaveRoom(user, room)
 }
 
-// 設計がよくないので作り直し（ルームを読み込み、ここからルームを送信している）
+// ゲーム開始の処理
 func (s *MemoryService) StartGame(user *dto.User) error {
-	//hostかどうか、ほかにプレイヤーが一人以上いるか
+	// hostかどうか、ほかにプレイヤーが一人以上いるか
 	roomId := user.RoomID
 	room, err := s.memoryRepository.GetRoom(roomId)
 	if err != nil {
@@ -143,7 +153,7 @@ func (s *MemoryService) StartGame(user *dto.User) error {
 	if len(room.Players) <= 1 {
 		return errors.New("the room doesn't exist member")
 	}
-	//ルーム処理
+	// ルーム処理
 	err = s.memoryRepository.SetGame(room)
 	if err != nil {
 		return err
@@ -173,7 +183,7 @@ func (s *MemoryService) UpdatePlayerPosition(roomId string, clientID string, pla
 	if err != nil {
 		return err
 	}
-	if (*room_member)[clientID] == nil {
+	if room_member[clientID] == nil {
 		return errors.New("user not found in the room")
 	}
 	return s.memoryRepository.UpdatePlayerPosition(roomId, clientID, playerX, playerY)

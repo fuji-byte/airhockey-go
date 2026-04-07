@@ -2,10 +2,8 @@ package dto
 
 type GameRoomOutput struct {
 	// パックの座標と速度
-	PuckX      float64 `json:"PuckX"`
-	PuckY      float64 `json:"PuckY"`
-	PuckSpeedX float64 `json:"PuckSpeedX"`
-	PuckSpeedY float64 `json:"PuckSpeedY"`
+	PuckX float64 `json:"PuckX"`
+	PuckY float64 `json:"PuckY"`
 	// それぞれのプレイヤーのスコア
 	Score1 int `json:"Score1"`
 	Score2 int `json:"Score2"`
