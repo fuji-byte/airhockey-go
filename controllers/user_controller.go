@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"main/dto"
-	"main/models"
 	"main/services"
 
 	"github.com/gin-gonic/gin"
@@ -50,8 +49,8 @@ func (c *MemoryController) HandleWebSocket(ctx *gin.Context) {
 	defer conn.Close()
 
 	// 新しいクライアントを登録
-	clientId := uuid.New().String()
-	user, err := c.service.CreateUser(clientId, conn)
+	clientID := uuid.New().String()
+	user, err := c.service.CreateUser(clientID, conn)
 	go user.StartWriter()
 	if err != nil {
 		log.Fatal("CreateUser Error")
@@ -62,16 +61,16 @@ func (c *MemoryController) HandleWebSocket(ctx *gin.Context) {
 	//websocket接続切断時の処理
 	defer func() {
 		//user情報削除、または一定時間保持
-		//room情報 models.gameroomの情報変更,models.user[clientId]の削除
+		//room情報 dto.GameRoomの情報変更,dto.User[clientID]の削除
 		//データベース使うならuser.IsOnline falseにする
 
-		// user, err := c.service.GetUserByClientId(clientId)
+		// user, err := c.service.GetUserByClientID(clientID)
 		// if err != nil {
 		// 	fmt.Println("user取得エラー")
 		// }
 		//errは使わない　ユーザーがroomが存在していない場合があるから
 		users, _ := c.service.GetUsersByRoomId(user.RoomID)
-		err := c.service.DeleteUser(clientId)
+		err := c.service.DeleteUser(clientID)
 		if err != nil {
 			log.Fatal("DeleteUser Error")
 		}
@@ -80,7 +79,7 @@ func (c *MemoryController) HandleWebSocket(ctx *gin.Context) {
 			broadcast(*users, "roomNum", "message", len(*users))
 			fmt.Println(users)
 		}
-		fmt.Println("切断後処理完了:", clientId)
+		fmt.Println("切断後処理完了:", clientID)
 	}()
 
 	//接続状態時の処理
@@ -110,7 +109,7 @@ func (c *MemoryController) HandleWebSocket(ctx *gin.Context) {
 			}
 			switch receivedMsg.Type {
 			case "makeRoom":
-				roomId, err := c.service.MakeRoom(clientId)
+				roomId, err := c.service.MakeRoom(clientID)
 				if err != nil {
 					fmt.Println("MakeRoom Error:", err)
 					msg := `{"type":"errorMessage","message":"ルームを作成できませんでした。","error": "make a room Error"}`
@@ -122,7 +121,7 @@ func (c *MemoryController) HandleWebSocket(ctx *gin.Context) {
 				user.Send(`{"type":"host"}`)
 				continue
 			case "joinRoom":
-				user, err := c.service.GetUserByClientId(clientId)
+				user, err := c.service.GetUserByClientID(clientID)
 				if err != nil {
 					fmt.Println("no users:", err)
 					user.Send(`{"type":"errorMessage","message":"ユーザーを取得できませんでした。","error": "couldn't get the users Error"}`)
@@ -146,7 +145,7 @@ func (c *MemoryController) HandleWebSocket(ctx *gin.Context) {
 				user.Send(fmt.Sprintf(`{"type":"roomId","message":"%v"}`, user.RoomID))
 				continue
 			case "leaveRoom":
-				user, err := c.service.GetUserByClientId(clientId)
+				user, err := c.service.GetUserByClientID(clientID)
 				if err != nil {
 					fmt.Println("no users:", err)
 					user.Send(`{"type":"errorMessage","message":"ユーザーを取得できませんでした。","error": "couldn't get the users Error"}`)
@@ -160,7 +159,7 @@ func (c *MemoryController) HandleWebSocket(ctx *gin.Context) {
 				continue
 			case "match":
 				//host playerがmatchを送信したら
-				user, err := c.service.GetUserByClientId(clientId)
+				user, err := c.service.GetUserByClientID(clientID)
 				if err != nil {
 					fmt.Println("no users:", err)
 					user.Send(`{"type":"errorMessage","message":"ユーザーを取得できませんでした。","error": "couldn't get the users Error"}`)
@@ -197,52 +196,31 @@ func (c *MemoryController) HandleWebSocket(ctx *gin.Context) {
 					fmt.Println("no users", err)
 					continue
 				}
-				user.Send(fmt.Sprintf(`{"type":"userNum","message":"%d"}`, len(*users)))
+				user.Send(fmt.Sprintf(`{"type":"userNum","message":"%d"}`, len(users)))
 				continue
 			default:
 				user.Send(`{"type":"errorMessage","message":"タイプが適切ではありません","error": "type Error"}`)
 				continue
 			}
-
 		case "game":
 			var receivedMsg dto.GameRoomInput
 			if err := json.Unmarshal(raw.Data, &receivedMsg); err != nil {
 				fmt.Println("GameRoomInput の解析に失敗:", err)
 				continue
 			}
-			switch receivedMsg.Type {
-			case "addCellConn":
-				user, err := c.service.GetUserByClientId(clientId)
-				if err != nil {
-					fmt.Println("no users:", err)
-					user.Send(`{"type":"errorMessage","message":"ユーザーを取得できませんでした。","error": "couldn't get the users Error"}`)
-					continue
-				}
-				err = c.service.CellConn(user.ID, user.RoomID, receivedMsg.CellConnFrom, receivedMsg.CellConnTo)
-				if err != nil {
-					user.Send(`{"type":"errorMessage","message":"ルームデータをアップデートできませんでした。","error": "couldn't update the room Error"}`)
-					fmt.Printf("%s\n", err)
-					continue
-				}
-				continue
-			case "delCellConn":
-				user, err := c.service.GetUserByClientId(clientId)
-				if err != nil {
-					fmt.Println("no users:", err)
-					user.Send(`{"type":"errorMessage","message":"ユーザーを取得できませんでした。","error": "couldn't get the users Error"}`)
-					continue
-				}
-				err = c.service.DelCellConn(user.ID, user.RoomID, receivedMsg.CellConnFrom, receivedMsg.CellConnTo)
-				if err != nil {
-					user.Send(`{"type":"errorMessage","message":"ルームデータをアップデートできませんでした。","error": "couldn't update the room Error"}`)
-					fmt.Printf("%s\n", err)
-					continue
-				}
-				continue
-			default:
-				user.Send(`{"type":"errorMessage","message":"タイプが適切ではありません","error": "type Error"}`)
+			user, err := c.service.GetUserByClientID(clientID)
+			if err != nil {
+				fmt.Println("no users:", err)
+				user.Send(`{"type":"errorMessage","message":"ユーザーを取得できませんでした。","error": "couldn't get the users Error"}`)
 				continue
 			}
+			err = c.service.UpdatePlayerPosition(user.RoomID, clientID, receivedMsg.PlayerX, receivedMsg.PlayerY)
+			if err != nil {
+				fmt.Println("UpdatePlayerPosition Error:", err)
+				user.Send(`{"type":"errorMessage","message":"プレイヤーの位置を更新できませんでした。","error": "failed to update player position Error"}`)
+				continue
+			}
+			continue
 		default:
 			fmt.Println("不明なタイプ:", raw.Type)
 			continue
@@ -257,13 +235,13 @@ func (c *MemoryController) userNumControll() int {
 		fmt.Println("no users", err)
 		return -1
 	}
-	broadcast(*users, "userNum", "message", len(*users))
-	return len(*users)
+	broadcast(users, "userNum", "message", len(users))
+	return len(users)
 }
 
-// broadcast wants users map[string]*models.User, messageType string, content(int float32 string)
+// broadcast wants users map[string]*dto.User, messageType string, content(int float32 string)
 func broadcast[T int | float32 | string](
-	users map[string]*models.User,
+	users map[string]*dto.User,
 	messageType1 string,
 	messageType2 string,
 	content T,

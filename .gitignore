@@ -1,5 +1,4 @@
 .env
 .air.toml
-go.mod
 go.sum
 tmp

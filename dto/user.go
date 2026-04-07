@@ -1,4 +1,4 @@
-package models
+package dto
 
 import (
 	"fmt"
@@ -18,6 +18,7 @@ type User struct {
 	SendCh   chan []byte
 }
 
+// User構造体にWebSocketの書き込み処理を追加
 func (u *User) StartWriter() {
 	for msg := range u.SendCh {
 		if err := u.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
@@ -36,6 +37,7 @@ func (u *User) Send(msg string) {
 	}
 }
 
+// WebSocket接続が切断されたときのクリーンアップ処理
 func (u *User) Cleanup() {
 	u.once.Do(func() {
 		if u.Conn != nil {

@@ -5,51 +5,43 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"maps"
-	"math/rand"
 	"sync"
 	"time"
 
 	"main/dto"
-	"main/models"
-
-	"github.com/google/uuid"
 )
 
 type IMemoryRepository interface {
-	CreateUser(user *models.User) (*models.User, error)
-	DeleteUser(clientId string) error
+	CreateUser(user *dto.User) (*dto.User, error)
+	DeleteUser(clientID string) error
 	UserNum() int
-	GetAllUser() (*map[string]*models.User, error)
-	GetUserByClientId(Id string) (*models.User, error)
-	GetUsersByRoomId(Id string) (*map[string]*models.User, error)
-	MakeRoom(room *models.GameRoom, user *models.User) (*models.GameRoom, error)
-	GetRoom(roomId string) (*models.GameRoom, error)
-	JoinRoom(roomId string, user *models.User) (*map[string]*models.User, error)
-	LeaveRoom(user *models.User, room *models.GameRoom) error
-	SetGame(room *models.GameRoom) error
-	RunGame(signal chan string, userCh chan *models.GameRoom, ch chan *models.GameRoom, room *models.GameRoom) error
-	// TestRoom(ch chan *models.GameRoom) (*models.GameRoom, error)
-	SetCh(room *models.GameRoom, ch chan *models.GameRoom, userch chan *models.GameRoom, signal chan string) error
-	SaveLogRoom(room *models.GameRoom) error
-	CheckCells(cellConnFrom, cellConnTo string, room *models.GameRoom) error
-	CompareCellId(clientId, cellId string, room *models.GameRoom) error
-	AddCellConn(cellConnFrom, cellConnTo string, room *models.GameRoom) error
-	DelCellConn(cellConnFrom, cellConnTo string, room *models.GameRoom) error
+	GetAllUser() (map[string]*dto.User, error)
+	GetUserByClientID(Id string) (*dto.User, error)
+	GetUsersByRoomId(Id string) (*map[string]*dto.User, error)
+	MakeRoom(room *dto.GameRoom, user *dto.User) (*dto.GameRoom, error)
+	GetRoom(roomId string) (*dto.GameRoom, error)
+	JoinRoom(roomId string, user *dto.User) (*map[string]*dto.User, error)
+	LeaveRoom(user *dto.User, room *dto.GameRoom) error
+	SetGame(room *dto.GameRoom) error
+	RunGame(signal chan string, userCh chan *dto.GameRoom, ch chan *dto.GameRoom, room *dto.GameRoom) error
+	// TestRoom(ch chan *dto.GameRoom) (*dto.GameRoom, error)
+	SetCh(room *dto.GameRoom, ch chan *dto.GameRoom, userch chan *dto.GameRoom, signal chan string) error
+	SaveLogRoom(room *dto.GameRoom) error
+	UpdatePlayerPosition(roomId string, clientID string, playerX, playerY float64) error
 }
 
 // 現状、すべての変数にmuがつくため、効率が良くない
 type MemoryRepository struct {
-	memoryUser     map[string]*models.User     // ユーザーID → ユーザー
-	memoryGameRoom map[string]*models.GameRoom // ルームID → ゲームルーム
+	memoryUser     map[string]*dto.User     // ユーザーID → ユーザー
+	memoryGameRoom map[string]*dto.GameRoom // ルームID → ゲームルーム
 	mu             sync.Mutex
 }
 
-func NewMemoryRepository(memoryUser map[string]*models.User, memoryGameRoom map[string]*models.GameRoom) IMemoryRepository {
+func NewMemoryRepository(memoryUser map[string]*dto.User, memoryGameRoom map[string]*dto.GameRoom) IMemoryRepository {
 	return &MemoryRepository{memoryUser: memoryUser, memoryGameRoom: memoryGameRoom}
 }
 
-func (s *MemoryRepository) CreateUser(user *models.User) (*models.User, error) {
+func (s *MemoryRepository) CreateUser(user *dto.User) (*dto.User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.memoryUser[(*user).ID] != nil {
@@ -59,8 +51,8 @@ func (s *MemoryRepository) CreateUser(user *models.User) (*models.User, error) {
 	return user, nil
 }
 
-func (s *MemoryRepository) DeleteUser(clientId string) error {
-	user, err := s.GetUserByClientId(clientId)
+func (s *MemoryRepository) DeleteUser(clientID string) error {
+	user, err := s.GetUserByClientID(clientID)
 	if user == nil || err != nil {
 		return err
 	}
@@ -69,20 +61,20 @@ func (s *MemoryRepository) DeleteUser(clientId string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if room := s.memoryGameRoom[user.RoomID]; room != nil {
-		s.DeleteUserInRoom(room, clientId)
+		s.DeleteUserInRoom(room, clientID)
 	}
 
-	if user := s.memoryUser[clientId]; user == nil {
+	if user := s.memoryUser[clientID]; user == nil {
 		return errors.New("user already deleted")
 	}
-	delete(s.memoryUser, clientId)
+	delete(s.memoryUser, clientID)
 	return nil
 }
 
 // 呼び出し元関数でmutexをしておくこと、roomがnilでないか確認しておくこと
-func (s *MemoryRepository) DeleteUserInRoom(room *models.GameRoom, clientId string) error {
-	delete(room.Players, clientId)
-	// delete(room.Observers, clientId)
+func (s *MemoryRepository) DeleteUserInRoom(room *dto.GameRoom, clientID string) error {
+	delete(room.Players, clientID)
+	// delete(room.Observers, clientID)
 	//ホストの変更もしくはルームの削除を行う
 	//観戦者を含めるか
 	if len(room.Players) <= 0 {
@@ -96,9 +88,9 @@ func (s *MemoryRepository) DeleteUserInRoom(room *models.GameRoom, clientId stri
 		delete(s.memoryGameRoom, room.ID)
 		return nil
 	}
-	if clientId == room.HostPlayer.ID {
+	if clientID == room.HostPlayer.ID {
 		//host譲渡をここに書く また、hostが変更されたらhostになった人に通知
-		var firstUser *models.User
+		var firstUser *dto.User
 		for _, v := range room.Players {
 			firstUser = v
 			break // 最初の要素でループを抜ける
@@ -129,16 +121,16 @@ func (s *MemoryRepository) UserNum() int {
 	return userNum
 }
 
-func (s *MemoryRepository) GetAllUser() (*map[string]*models.User, error) {
+func (s *MemoryRepository) GetAllUser() (map[string]*dto.User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.memoryUser == nil {
 		return nil, errors.New("users not found")
 	}
-	return &s.memoryUser, nil
+	return s.memoryUser, nil
 }
 
-func (s *MemoryRepository) GetUserByClientId(Id string) (*models.User, error) {
+func (s *MemoryRepository) GetUserByClientID(Id string) (*dto.User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	user, ok := s.memoryUser[Id]
@@ -148,7 +140,7 @@ func (s *MemoryRepository) GetUserByClientId(Id string) (*models.User, error) {
 	return user, nil
 }
 
-func (s *MemoryRepository) GetUsersByRoomId(Id string) (*map[string]*models.User, error) {
+func (s *MemoryRepository) GetUsersByRoomId(Id string) (*map[string]*dto.User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	users, ok := s.memoryGameRoom[Id]
@@ -158,7 +150,7 @@ func (s *MemoryRepository) GetUsersByRoomId(Id string) (*map[string]*models.User
 	return &users.Players, nil
 }
 
-func (s *MemoryRepository) MakeRoom(room *models.GameRoom, user *models.User) (*models.GameRoom, error) {
+func (s *MemoryRepository) MakeRoom(room *dto.GameRoom, user *dto.User) (*dto.GameRoom, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.memoryGameRoom[(*room).ID] = room
@@ -166,14 +158,14 @@ func (s *MemoryRepository) MakeRoom(room *models.GameRoom, user *models.User) (*
 	return room, nil
 }
 
-func (s *MemoryRepository) JoinRoom(roomId string, user *models.User) (*map[string]*models.User, error) {
+func (s *MemoryRepository) JoinRoom(roomId string, user *dto.User) (*map[string]*dto.User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	room := s.memoryGameRoom[roomId]
 	if room == nil {
 		return nil, errors.New("empty room")
 	}
-	tempUsers := make(map[string]*models.User)
+	tempUsers := make(map[string]*dto.User)
 
 	for k, v := range room.Players {
 		tempUsers[k] = v
@@ -187,7 +179,7 @@ func (s *MemoryRepository) JoinRoom(roomId string, user *models.User) (*map[stri
 	return &tempUsers, nil
 }
 
-func (s *MemoryRepository) LeaveRoom(user *models.User, room *models.GameRoom) error {
+func (s *MemoryRepository) LeaveRoom(user *dto.User, room *dto.GameRoom) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	//room != nil確認済み
@@ -195,7 +187,7 @@ func (s *MemoryRepository) LeaveRoom(user *models.User, room *models.GameRoom) e
 	return s.DeleteUserInRoom(room, user.ID)
 }
 
-func (s *MemoryRepository) GetRoom(roomId string) (*models.GameRoom, error) {
+func (s *MemoryRepository) GetRoom(roomId string) (*dto.GameRoom, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	room := s.memoryGameRoom[roomId]
@@ -205,55 +197,18 @@ func (s *MemoryRepository) GetRoom(roomId string) (*models.GameRoom, error) {
 	return room, nil
 }
 
-// ※呼び出し元関数でロック必須
-func (s *MemoryRepository) makeCell(clientId string, room *models.GameRoom) (*models.Cell, error) {
-
-	//画面サイズ定義
-	screenWidth := 360.0
-	screenHeight := 640.0
-	margin := 20.0
-
-	active := false
-	if clientId != "" {
-		active = true
-	}
-
-	cell := models.Cell{
-		ID:       uuid.New().String(),
-		PlayerID: clientId,
-		Progress: 0,
-		X:        rand.Float64()*(screenWidth-2*margin) + margin,
-		Y:        rand.Float64()*(screenHeight-2*margin) + margin,
-		Rank:     1,
-		// Power:    1,
-		Active: active,
-	}
-
-	room.Cells[cell.ID] = &cell
-
-	return &cell, nil
-}
+// 	//画面サイズ定義
+// 	screenWidth := 360.0
+// 	screenHeight := 640.0
+// 	margin := 20.0
 
 // ゲーム開始前の試合管理
-func (s *MemoryRepository) SetGame(room *models.GameRoom) error {
+func (s *MemoryRepository) SetGame(room *dto.GameRoom) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if room == nil {
 		return errors.New("empty room")
-	}
-
-	//各プレイヤーのcell生産
-	for key := range room.Players {
-		_, err := s.makeCell(key, room)
-		if err != nil {
-			return err
-		}
-	}
-	i := 0
-	for i < rand.Intn(3)+1 {
-		s.makeCell("", room)
-		i++
 	}
 
 	room.Started = true
@@ -262,9 +217,9 @@ func (s *MemoryRepository) SetGame(room *models.GameRoom) error {
 }
 
 // chの使い道無い　現在
-func (s *MemoryRepository) RunGame(signal chan string, userCh chan *models.GameRoom, ch chan *models.GameRoom, room *models.GameRoom) error {
+func (s *MemoryRepository) RunGame(signal chan string, userCh chan *dto.GameRoom, ch chan *dto.GameRoom, room *dto.GameRoom) error {
 	updateTicker := time.NewTicker(30 * time.Millisecond)
-	endTimer := time.After(time.Duration(room.TimeLeftSec) * time.Second)
+	endTimer := time.After(time.Duration(room.GameState.TimeLeftSec) * time.Second)
 	defer updateTicker.Stop()
 	// チャネル閉鎖は once で一回だけ
 
@@ -306,7 +261,9 @@ func (s *MemoryRepository) RunGame(signal chan string, userCh chan *models.GameR
 			//ルームのプレイヤーが０になったらsavelog以外消す？
 			// 再接続可能にするか
 			//更新した部分だけ、プレイヤーに送信する　例　時間だけ更新、cellConnだけ更新
-			s.Update(room)
+			s.mu.Lock()
+			room.GameState.TimeLeftSec -= 0.03
+			s.mu.Unlock()
 			s.Broadcast(room)
 			// s.SaveLogRoom(room)
 			// room, err := s.TestRoom(ch)
@@ -338,7 +295,7 @@ func (s *MemoryRepository) RunGame(signal chan string, userCh chan *models.GameR
 	}
 }
 
-// func (s *MemoryRepository) TestRoom(ch chan *models.GameRoom) (*models.GameRoom, error) {
+// func (s *MemoryRepository) TestRoom(ch chan *dto.GameRoom) (*dto.GameRoom, error) {
 // 	s.mu.Lock()
 // 	defer s.mu.Unlock()
 // 	newRoom := <-ch
@@ -347,50 +304,7 @@ func (s *MemoryRepository) RunGame(signal chan string, userCh chan *models.GameR
 // 	return room, nil
 // }
 
-func (s *MemoryRepository) Update(room *models.GameRoom) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	room.TimeLeftSec -= 0.03
-
-	//すべてのcell(active)の管理
-	for _, inner := range room.Cells {
-		if inner.Active {
-			inner.Progress += 1
-			if inner.Progress >= 100 {
-				inner.Progress = 0
-				inner.Rank += 1
-			}
-		}
-	}
-
-	//接続しているcellの管理 k = cellConnFrom ,innerK = cellConnTo
-	for k, inner := range room.CellConn {
-		for innerK := range inner {
-			inner[innerK] += 1
-			if inner[innerK] >= 50 {
-				inner[innerK] = 0
-				cell := room.Cells[innerK]
-				if cell.PlayerID == room.Cells[k].PlayerID {
-					cell.Rank += 1
-				} else {
-					cell.Rank -= 1
-					//cell dead
-					if cell.Rank <= 0 {
-						cell.PlayerID = room.Cells[k].PlayerID
-						room.CellConn[innerK] = make(map[string]int)
-						cell.Active = true
-						cell.Rank = 0
-					}
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
-func (s *MemoryRepository) SaveLogRoom(room *models.GameRoom) error {
+func (s *MemoryRepository) SaveLogRoom(room *dto.GameRoom) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	//プロトタイプ完成後に実装。
@@ -398,13 +312,21 @@ func (s *MemoryRepository) SaveLogRoom(room *models.GameRoom) error {
 	return nil
 }
 
-func (s *MemoryRepository) Broadcast(room *models.GameRoom) error {
+func (s *MemoryRepository) Broadcast(room *dto.GameRoom) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sendMessage := &dto.GameRoomOutput{
-		Cells:       room.Cells,
-		CellConn:    room.CellConn,
-		TimeLeftSec: room.TimeLeftSec,
+		PuckX:       room.GameState.PuckX,
+		PuckY:       room.GameState.PuckY,
+		PuckSpeedX:  room.GameState.PuckSpeedX,
+		PuckSpeedY:  room.GameState.PuckSpeedY,
+		Score1:      room.GameState.Score1,
+		Score2:      room.GameState.Score2,
+		TimeLeftSec: room.GameState.TimeLeftSec,
+		Player1X:    room.GameState.Player1X,
+		Player1Y:    room.GameState.Player1Y,
+		Player2X:    room.GameState.Player2X,
+		Player2Y:    room.GameState.Player2Y,
 	}
 	jsonData, err := json.Marshal(*sendMessage)
 	if err != nil {
@@ -420,7 +342,7 @@ func (s *MemoryRepository) Broadcast(room *models.GameRoom) error {
 	return nil
 }
 
-func (s *MemoryRepository) SetCh(room *models.GameRoom, ch chan *models.GameRoom, userch chan *models.GameRoom, signal chan string) error {
+func (s *MemoryRepository) SetCh(room *dto.GameRoom, ch chan *dto.GameRoom, userch chan *dto.GameRoom, signal chan string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if room == nil {
@@ -432,109 +354,16 @@ func (s *MemoryRepository) SetCh(room *models.GameRoom, ch chan *models.GameRoom
 	return nil
 }
 
-// roomにcellConnFrom, cellConnToが存在しているか調べる
-func (s *MemoryRepository) CheckCells(cellConnFrom, cellConnTo string, room *models.GameRoom) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if room == nil {
-		return errors.New("empty room")
+func (s *MemoryRepository) UpdatePlayerPosition(roomId string, clientID string, playerX, playerY float64) error {
+	room, err := s.GetRoom(roomId)
+	if err != nil {
+		return err
 	}
-	if room.Cells[cellConnFrom] == nil || room.Cells[cellConnTo] == nil {
-		return errors.New("invalid cellId")
+	if room.Players[clientID] == nil {
+		return errors.New("player not found in the room")
 	}
+	// プレイヤーが存在している場合かつ、clientIDが一致する場合に位置を更新
+	// room.Players[clientID].PlayerX = playerX
+	// room.Players[clientID].PlayerY = playerY
 	return nil
-}
-
-// cellのプレイヤーIDとクライアントIDを比較
-func (s *MemoryRepository) CompareCellId(clientId, cellId string, room *models.GameRoom) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	// if room == nil {
-	// 	return errors.New("empty room")
-	// }
-	cell := (*room).Cells[cellId]
-	//stringより、nilチェックなし
-	if (*cell).PlayerID != clientId {
-		return errors.New("you can't operate this cell")
-	}
-	return nil
-}
-
-func (s *MemoryRepository) AddCellConn(cellConnFrom, cellConnTo string, room *models.GameRoom) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// if room == nil {
-	// 	return errors.New("empty room")
-	// }
-
-	//cellConnFrom検証している前提
-	if _, exists := room.CellConn[cellConnFrom][cellConnTo]; exists {
-		return errors.New("cell conn already exists")
-	}
-
-	if room.Cells[cellConnFrom].Rank/10+1 <= len(room.CellConn[cellConnFrom]) {
-		return errors.New("cell conn already max")
-	}
-
-	if _, exists := room.CellConn[cellConnTo][cellConnFrom]; exists {
-		if room.Cells[cellConnFrom].PlayerID == room.Cells[cellConnTo].PlayerID {
-			return errors.New("cycle is not permitted")
-		}
-	}
-
-	newRoom := *room
-	// CellConn のディープコピー
-	newCellConn := make(map[string]map[string]int, len(room.CellConn))
-	for k, v := range room.CellConn {
-		innerCopy := make(map[string]int, len(v))
-		maps.Copy(innerCopy, v) // 内側のマップをコピー
-		newCellConn[k] = innerCopy
-	}
-
-	// 新しい接続を追加
-	if _, ok := newCellConn[cellConnFrom]; !ok {
-		newCellConn[cellConnFrom] = make(map[string]int)
-	}
-	newCellConn[cellConnFrom][cellConnTo] = 0
-	newRoom.CellConn = newCellConn
-
-	//検証後にroomに保存する
-	select {
-	case room.UserCh <- &newRoom:
-		return nil
-	default:
-		return errors.New("user channel is blocked")
-	}
-}
-
-func (s *MemoryRepository) DelCellConn(cellConnFrom, cellConnTo string, room *models.GameRoom) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// if room == nil {
-	// 	return errors.New("empty room")
-	// }
-	if _, exists := room.CellConn[cellConnFrom][cellConnTo]; !exists {
-		return errors.New("no such key exists")
-	}
-
-	newRoom := *room
-	// CellConn のディープコピー
-	newCellConn := make(map[string]map[string]int, len(room.CellConn))
-	for k, v := range room.CellConn {
-		innerCopy := make(map[string]int, len(v))
-		maps.Copy(innerCopy, v) // 内側のマップをコピー
-		newCellConn[k] = innerCopy
-	}
-
-	delete(newCellConn[cellConnFrom], cellConnTo)
-	newRoom.CellConn = newCellConn
-
-	select {
-	case room.UserCh <- &newRoom:
-		return nil
-	default:
-		return errors.New("user channel is blocked")
-	}
 }

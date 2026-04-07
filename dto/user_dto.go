@@ -2,8 +2,6 @@ package dto
 
 import (
 	"encoding/json"
-
-	"main/models"
 )
 
 type TypeInput struct {
@@ -12,12 +10,12 @@ type TypeInput struct {
 }
 
 type MessageInput struct {
-	Type     string          `json:"type"`
-	Option   string          `json:"option"`
-	RoomID   string          `json:"roomId"`
-	Message  string          `json:"message"`
-	Error    error           `json:"err"`
-	GameRoom models.GameRoom `json:"gameRoom"`
+	Type     string   `json:"type"`
+	Option   string   `json:"option"`
+	RoomID   string   `json:"roomId"`
+	Message  string   `json:"message"`
+	Error    error    `json:"err"`
+	GameRoom GameRoom `json:"gameRoom"`
 }
 
 // type MessageOutput struct {

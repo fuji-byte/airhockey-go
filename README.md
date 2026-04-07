@@ -28,6 +28,7 @@ sync あたりの最適化も
 フレンド機能
 guest でもトークンを生成してユーザー認証を行う
 savelog function の実装
+cookieにより一度ログインしたら自動認証できるようにする
 
 <!-- #Redis の利用
 redis を入れていないなら、redis を導入する
