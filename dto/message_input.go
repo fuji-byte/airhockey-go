@@ -1,10 +1,10 @@
 package dto
 
 type MessageInput struct {
+	// Typeは、クライアントからのメッセージの種類を識別するためのフィールド
 	Type string `json:"type"`
-	// Option   string   `json:"option"`
+	// ルームIDは、ユーザーがルームに参加する際に必要な情報
 	RoomID string `json:"roomId"`
-	// Message string `json:"message"`
-	// Error    error    `json:"err"`
+	// プレイヤーの位置情報は、ゲーム更新に必要な情報
 	Position PositionInput `json:"position"`
 }
