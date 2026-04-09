@@ -361,13 +361,13 @@ func (s *MemoryRepository) update(room *dto.GameRoom) {
 	if room.GameState.Player1X < 0 {
 		room.GameState.Player1X = 0
 	}
-	if room.GameState.Player2X < 0 {
-		room.GameState.Player2X = 0
+	if room.GameState.Player2X > room.Width {
+		room.GameState.Player2X = room.Width
 	}
 	if room.GameState.Player1X > room.Width/2 {
 		room.GameState.Player1X = room.Width / 2
 	}
-	if room.GameState.Player2X > room.Width/2 {
+	if room.GameState.Player2X < room.Width/2 {
 		room.GameState.Player2X = room.Width / 2
 	}
 }
