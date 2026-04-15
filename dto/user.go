@@ -1,4 +1,4 @@
-package models
+package dto
 
 import (
 	"fmt"
@@ -7,9 +7,9 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// on memory
+// User はクライアントを表す構造体
 type User struct {
-	ID       string //clientId　一応primaryKey
+	ID       string //clientId　primaryKey
 	Name     string
 	IsOnline bool
 	Conn     *websocket.Conn
@@ -18,6 +18,8 @@ type User struct {
 	SendCh   chan []byte
 }
 
+// これらのメソッドは、ユーザー接続を楽にするためのもの。
+// User構造体にWebSocketの書き込み処理を追加
 func (u *User) StartWriter() {
 	for msg := range u.SendCh {
 		if err := u.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
@@ -36,6 +38,7 @@ func (u *User) Send(msg string) {
 	}
 }
 
+// WebSocket接続が切断されたときのクリーンアップ処理
 func (u *User) Cleanup() {
 	u.once.Do(func() {
 		if u.Conn != nil {

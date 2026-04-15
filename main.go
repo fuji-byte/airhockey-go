@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"runtime"
 
@@ -8,7 +9,7 @@ import (
 	_ "net/http/pprof"
 
 	"main/controllers"
-	"main/models"
+	"main/dto"
 	"main/repositories"
 	"main/services"
 
@@ -24,8 +25,8 @@ func main() {
 			log.Println("pprof サーバー終了:", err)
 		}
 	}()
-	users := make(map[string]*models.User, 0)
-	gameRooms := make(map[string]*models.GameRoom, 0)
+	users := make(map[string]*dto.User, 0)
+	gameRooms := make(map[string]*dto.GameRoom, 0)
 	userMemoryRepository := repositories.NewMemoryRepository(users, gameRooms)
 	userMemoryService := services.NewMemoryService(userMemoryRepository)
 	userController := controllers.NewMemoryController(userMemoryService)
@@ -41,9 +42,8 @@ func main() {
 		MaxAge:           86400, // プリフライトリクエストを24時間キャッシュ
 	}))
 
+	fmt.Println("ws://localhost:8080で起動")
 	r.GET("/ws", userController.HandleWebSocket)
 	// r.GET("/login", RedisSessionController.Login)
 	r.Run(":8080")
 }
-
-//cookieにより一度ログインしたら自動認証できるようにする
