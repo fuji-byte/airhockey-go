@@ -1,7 +1,57 @@
-# airhockeyバックエンド
+# airhockey バックエンド
 
-[参照](https://github.com/fuji-byte/RtsGame/tree/feature/ingame)
+[デモサイト](http://158.217.71.32:22224)
 
+オンラインエアーホッケーゲームのバックエンド実装です。  
+WebSocket を利用したリアルタイム通信に対応しています。
+
+## 主な機能
+
+- オンライン対戦
+- ルーム作成・管理
+- ユーザーセッション管理
+- パック・プレイヤーの衝突処理
+- WebSocket によるリアルタイム同期
+
+---
+
+## インストール方法
+
+※ Go の実行環境が必要です。
+
+```bash
+go mod tidy
+go run .
+```
+
+開発用に、airでのホットリロードも可能です。
+
+※go言語、airの実行環境が必要です
+
+```bash
+air init # 一回目のみ必要
+air
+```
+
+## ディレクトリ構成
+```text
+.
+├── controllers/   # WebSocketメッセージのルーティング
+├── dto/           # DTO・構造体定義
+├── services/      # ビジネスロジック
+├── repositories/  # データ管理・状態保持
+└── main.go        # エントリーポイント / URLルーティング
+```
+ 
+ ## 技術スタック
+ ```text
+ Go
+ air
+```
+
+[リファクタリング前の参照](https://github.com/fuji-byte/RtsGame/tree/feature/ingame)
+
+<!--
 反省点
 現時点で、リポジトリ層はオンメモリの設計なので、サービス層とリポジトリ層の境目が薄い。（リポジトリ層にサービス層のものまで入ってしまっている）
 roomとplayerのmutexが共有になっている
@@ -27,25 +77,4 @@ sync あたりの最適化も
 フレンド機能
 guest でもトークンを生成してユーザー認証を行う
 savelog function の実装
-cookieにより自動認証できるようにする
-
-<!-- #Redis の利用
-redis を入れていないなら、redis を導入する
-sudo apt update
-sudo apt install redis-server
-sudo service redis-server start -->
-
-<!-- wsl の redis の実行
-sudo service redis-server start -->
-
-golang 実行
-go mod tidy
-air init
-air
-
-<!-- http://localhost:8080/login?user_id=testuser123 -->
-
-<!-- Redis クライアント確認(wsl)
-redis-cli
-keys \*
-get session:クライアント id -->
+cookieにより自動認証できるようにする -->
